@@ -526,3 +526,198 @@ class Corpus:
             
         
         
+def vekstdiagram(urn, params=dict()):
+    import requests
+    import pandas as pd
+    
+    # if urn is the value of get_urn() it is a list 
+    # otherwise it just passes
+    if type(urn) is list:
+        urn = urn[0]
+    
+    para = params
+    para['urn']= urn
+    r = requests.post('https://api.nb.no/ngram/vekstdiagram', json = para)
+    return pd.DataFrame(r.json())
+
+def plot_sammen_vekst(urn, ordlister, window=5000, pr = 100):
+    """Plott alle seriene sammen"""
+    rammer = []
+    for ordbag in ordlister:
+        vekst = vekstdiagram(urn, params = {'words': ordbag, 'window':window, 'pr': pr} )
+        vekst.columns = [ordbag[0]]
+        rammer.append(vekst)
+    return pd.concat(rammer)
+
+def relaterte_ord(word, number = 20, score=False):
+    import networkx as nx
+    from networkx.algorithms import community
+    
+    G = make_graph(word)
+    res = Counter(nx.eigenvector_centrality(G)).most_common(number) 
+    if score == False:
+        res = [x[0] for x in res]
+    return res
+
+def get_freq(urn, top=50, cutoff=3):
+    r = requests.get("https://api.nb.no/ngram/urnfreq", json={'urn':urn, 'top':top, 'cutoff':cutoff})
+    return Counter(dict(r.json()))
+
+def check_words(urn, ordbag):
+    if type(urn) is list:
+        urn = urn[0]
+    ordliste = get_freq(urn, top=50000, cutoff=1)
+    for w in ordbag:
+        print(w, ordliste[w])
+    return True
+
+def nb_ngram(terms, corpus='bok', smooth=3, years=(1810, 2010), mode='relative'):
+    return ngram_conv(get_ngram(terms, corpus=corpus),smooth=3, years=(1810, 2010), mode='relative')
+    
+def get_ngram(terms, corpus='avis'):
+    req = requests.get(
+        "http://www.nb.no/sp_tjenester/beta/ngram_1/ngram/query?terms={terms}&corpus={corpus}".format(
+            terms=terms,
+            corpus=corpus
+        ))
+    if req.status_code == 200:
+        res = req.text
+    else:
+        res = "[]"
+    return json.loads(res)
+
+def ngram_conv(ngrams, smooth=1, years=(1810,2013), mode='relative'):
+    ngc = {}
+    # check if relative frequency or absolute frequency is in question
+    if mode.startswith('rel') or mode=='y':
+        arg = 'y'
+    else:
+        arg = 'f'
+    for x in ngrams:
+        if x != []:
+            ngc[x['key']] = {z['x']:z[arg] for z in x['values'] if int(z['x']) <= years[1] and int(z['x']) >= years[0]}
+    return pd.DataFrame(ngc).rolling(window=smooth, win_type='triang').mean()
+
+
+def make_graph(word):
+    result = requests.get("https://www.nb.no/sp_tjenester/beta/ngram_1/galaxies/query?terms={word}".format(word=word))
+    G = nx.DiGraph()
+    edgelist = []
+    if result.status_code == 200:
+        graph = json.loads(result.text)
+        #print(graph)
+        nodes = graph['nodes']
+        edges = graph['links']
+        for edge in edges:
+            edgelist += [(nodes[edge['source']]['name'], nodes[edge['target']]['name'], abs(edge['value']))]
+    #print(edgelist)
+    G.add_weighted_edges_from(edgelist)
+    return G
+
+def get_konk(word, params=dict(), kind='html'):
+    import requests
+    import pandas as pd
+    
+    para = params
+    para['word']= word
+
+    corpus = 'bok'
+    if 'corpus' in para:
+        corpus = para['corpus']
+    else:
+        para['corpus'] = corpus
+        
+    r = requests.get('https://api.nb.no/ngram/konk', params=para)
+    if kind=='html':
+        rows = ""
+        if corpus == 'bok':
+            for x in r.json():
+                rows += """<tr>
+                <td>
+                    <a href='{urn}' target='_'>{urnredux}</a>
+                    <td>{b}</td>
+                    <td>{w}</td>
+                    <td style='text-align:left'>{a}</td>
+                    </tr>\n""".format(urn=x['urn'], 
+                                      urnredux=','.join([x['author'], x['title'], str(x['year'])]),
+                                      b=x['before'],
+                                      w=x['word'],
+                                      a=x['after']
+                                     )
+            res = "<table>{rows}</table>".format(rows=rows)   
+        else:
+            #print(r.json())
+            for x in r.json():
+                rows += """<tr>
+                <td>
+                    <a href='{urn}' target='_'>{urnredux}</a>
+                    <td>{b}</td>
+                    <td>{w}</td>
+                    <td style='text-align:left'>{a}</td>
+                    </tr>\n""".format(urn=x['urn'], 
+                                      urnredux='-'.join(x['urn'].split('_')[2:6:3]),
+                                      b=x['before'],
+                                      w=x['word'],
+                                      a=x['after']
+                                     )
+            res = "<table>{rows}</table>".format(rows=rows)   
+    elif kind == 'json':
+        res = r.json()
+    else:
+        try:
+            if corpus == 'bok':
+                res = pd.DataFrame(r.json())
+                res = res[['urn','author','title','year','before','word','after']]
+            else:
+                res = pd.DataFrame(r.json())
+                res = res[['urn','before','word','after']]
+            
+        except:
+            res= pd.DataFrame()
+        #r = r.style.set_properties(subset=['after'],**{'text-align':'left'})
+    return res
+
+
+
+def konk_to_html(jsonkonk):
+    rows = ""
+    for x in jsonkonk:
+        rows += "<tr><td><a href='{urn}' target='_'>{urnredux}</a><td>{b}</td><td>{w}</td><td style='text-align:left'>{a}</td></tr>\n".format(urn=x['urn'],
+                                                                                                          urnredux=x['urn'],
+                                                                                                          b=x['before'],
+                                                                                                      w=x['word'],
+                                                                                                          a=x['after'])
+    res = "<table>{rows}</table>".format(rows=rows)   
+    return res
+
+    
+
+def get_urnkonk(word, params=dict(), html=True):
+    import requests
+    import pandas as pd
+    
+    para = params
+    para['word']= word
+    r = requests.post('https://api.nb.no/ngram/urnkonk', json = para)
+    if html:
+        rows = ""
+        for x in r.json():
+            rows += """<tr>
+                <td>
+                    <a href='{urn}' target='_blank' style='text-decoration:none'>{urnredux}</a>
+                </td>
+                <td>{b}</td>
+                <td>{w}</td>
+                <td style='text-align:left'>{a}</td>
+            </tr>\n""".format(urn=x['urn'],
+                              urnredux="{t}, {f}, {y}".format(t=x['title'], f=x['author'], y=x['year']),
+                              b=x['before'],
+                              w=x['word'],
+                              a=x['after']
+                             )
+        res = """<table>{rows}</table>""".format(rows=rows)    
+    else:
+        res = pd.DataFrame(r.json())
+        res = res[['urn','before','word','after']]
+        #r = r.style.set_properties(subset=['after'],**{'text-align':'left'})
+    return res
