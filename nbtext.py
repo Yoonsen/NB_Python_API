@@ -572,7 +572,7 @@ def check_words(urn, ordbag):
     return True
 
 def nb_ngram(terms, corpus='bok', smooth=3, years=(1810, 2010), mode='relative'):
-    return ngram_conv(get_ngram(terms, corpus=corpus),smooth=3, years=(1810, 2010), mode='relative')
+    return ngram_conv(get_ngram(terms, corpus=corpus), smooth=smooth, years=years, mode=mode)
     
 def get_ngram(terms, corpus='avis'):
     req = requests.get(
@@ -720,4 +720,9 @@ def get_urnkonk(word, params=dict(), html=True):
         res = pd.DataFrame(r.json())
         res = res[['urn','before','word','after']]
         #r = r.style.set_properties(subset=['after'],**{'text-align':'left'})
+    return res
+
+def frame(something, name):
+    res =  pd.DataFrame(something)
+    res.columns = [name]
     return res
