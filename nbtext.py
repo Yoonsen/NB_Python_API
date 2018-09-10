@@ -567,8 +567,14 @@ def check_words(urn, ordbag):
     if type(urn) is list:
         urn = urn[0]
     ordliste = get_freq(urn, top=50000, cutoff=1)
+    res = Counter()
     for w in ordbag:
-        print(w, ordliste[w])
+        res[w] = ordliste[w]
+    for p in res.most_common():
+        if p[1] != 0:
+            print(p[0], p[1])
+        else:
+            break
     return True
 
 def nb_ngram(terms, corpus='bok', smooth=3, years=(1810, 2010), mode='relative'):
