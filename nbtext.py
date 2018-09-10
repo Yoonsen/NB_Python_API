@@ -399,7 +399,7 @@ class Corpus:
             'subject':subject,
             'ddk':ddk, 
             'author':author, 
-            'gender':gender,
+            #'gender':gender, ser ikke ut til å virke for get_urn - sjekk opp APIet
             'title':title, 
             'limit':max_books,
             'reference':reference
