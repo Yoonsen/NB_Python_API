@@ -17,10 +17,12 @@ except:
 
 
 def get_freq(urn, top=50, cutoff=3):
+    """Get frequency list for urn"""
     r = requests.get("https://api.nb.no/ngram/urnfreq", json={'urn':urn, 'top':top, 'cutoff':cutoff})
     return Counter(dict(r.json()))
 
 def get_urn(metadata = {}):
+    """Get urns fro metadata"""
     if not ('next' in metadata or 'neste' in metadata) :
         metadata['next'] = 100
     if not 'year' in metadata:
@@ -29,7 +31,7 @@ def get_urn(metadata = {}):
     return r.json()
 
 def get_papers(top=5, cutoff=5, navn='%', yearfrom=1800, yearto=2020, samplesize=100):
-    
+    """Get newspapers"""
     div = lambda x, y: (int(x/y), x % y)
     chunks = 20
     
